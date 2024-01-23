@@ -1,19 +1,6 @@
 #pragma once
 
-#include <wx/artprov.h>
-#include <wx/xrc/xmlres.h>
-#include <wx/string.h>
-#include <wx/listbox.h>
-#include <wx/gdicmn.h>
-#include <wx/font.h>
-#include <wx/colour.h>
-#include <wx/settings.h>
-#include <wx/button.h>
-#include <wx/bitmap.h>
-#include <wx/image.h>
-#include <wx/icon.h>
-#include <wx/sizer.h>
-#include <wx/dialog.h>
+#include <wx/wx.h>
 
 
 namespace snakes

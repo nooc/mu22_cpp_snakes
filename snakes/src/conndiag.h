@@ -3,14 +3,10 @@
 #include <wx/wx.h>
 #include <wx/confbase.h>
 
+#include "engine.h"
+
 namespace snakes
 {
-	enum ConnectionMode
-	{
-		CMODE_CLIENT,
-		CMODE_HOST
-	};
-
 	class ConnectionDialog : public wxDialog
 	{
 		private:
@@ -21,7 +17,7 @@ namespace snakes
 
 		public:
 
-			ConnectionDialog(wxWindow* parent, ConnectionMode mode, wxConfigBase& config);
+			ConnectionDialog(wxWindow* parent, EngineType mode, wxConfigBase& config);
 
 			~ConnectionDialog();
 

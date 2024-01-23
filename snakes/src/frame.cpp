@@ -10,7 +10,8 @@ using namespace snakes;
 
 MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& size, long style)
 	: wxFrame(0L, wxID_ANY, title, pos, size, style),
-	m_cfg("snakes", wxEmptyString, "snakes.cfg", wxEmptyString, wxCONFIG_USE_LOCAL_FILE)
+	m_cfg("snakes", wxEmptyString, "snakes.cfg", wxEmptyString, wxCONFIG_USE_LOCAL_FILE),
+	m_game(NULL)
 {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 	SetMaxSize(wxSize(600, 1080));
@@ -91,6 +92,10 @@ MainFrame::~MainFrame()
 	m_historyButton->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(MainFrame::ShowHistory), NULL, this);
 
 }
+void MainFrame::ProcessSocket(wxSocketEvent& event)
+{
+	if (m_game) m_game->ProcessEvent(event);
+}
 
 void MainFrame::PaintGame(wxPaintEvent& event)
 {
@@ -109,26 +114,35 @@ void MainFrame::PaintGame(wxPaintEvent& event)
 	}
 }
 
-void MainFrame::ConnectToRemote(wxCommandEvent& event)
+void MainFrame::_CreateGame(EngineType mode)
 {
-	ConnectionDialog dlg(this, CMODE_CLIENT, m_cfg);
+	ConnectionDialog dlg(this, mode, m_cfg);
 	if (dlg.ShowModal() == wxID_OK)
 	{
-		wxMessageBox(dlg.GetValue(), wxT("Connect"), wxICON_INFORMATION);
+		_EnableConnectButtons(false);
+		m_game = EngineFactory::Create(mode, dlg.GetValue(), this);
+		m_game->SetGameComponent(m_gameView);
 	}
+}
+
+void MainFrame::ConnectToRemote(wxCommandEvent& event)
+{
+	_CreateGame(ET_CLIENT);
 }
 
 void MainFrame::StartAsHost(wxCommandEvent& event)
 {
-	ConnectionDialog dlg(this, CMODE_HOST, m_cfg);
-	if (dlg.ShowModal() == wxID_OK)
-	{
-		wxMessageBox(dlg.GetValue(), wxT("Connect"), wxICON_INFORMATION);
-	}
+	_CreateGame(ET_HOST);
 }
 
 void MainFrame::ShowHistory(wxCommandEvent& event)
 {
 	HistoryDialog dlg(this);
 	dlg.ShowModal();
+}
+
+void MainFrame::_EnableConnectButtons(bool enabled)
+{
+	m_hotsButton->Enable(enabled);
+	m_connectButton->Enable(enabled);
 }
