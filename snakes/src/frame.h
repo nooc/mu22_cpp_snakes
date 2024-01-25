@@ -25,13 +25,17 @@ namespace snakes
 			wxButton* m_historyButton;
 			wxButton* m_connectButton;
 			wxButton* m_hotsButton;
-			wxStaticText* m_connectionTexrt;
+			wxButton* m_disconnectButton;
 
 			void PaintGame(wxPaintEvent& event);
 			void ConnectToRemote(wxCommandEvent& event);
 			void StartAsHost(wxCommandEvent& event);
+			void DisconnectGame(wxCommandEvent& event);
 			void ShowHistory(wxCommandEvent& event);
 			void ProcessSocket(wxSocketEvent& event);
+			void ProcessKeyInput(wxKeyEvent& event);
+			void ProcessTick(wxTimerEvent& event);
+			void OnEngineEvent(EngineEvent& event);
 
 			void _EnableConnectButtons(bool ebabled);
 			void _CreateGame(EngineType mode);

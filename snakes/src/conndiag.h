@@ -25,5 +25,5 @@ namespace snakes
 
 	};
 
-} // namespace snakes
+}
 

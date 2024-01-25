@@ -16,6 +16,7 @@
     <ClCompile Include="src\frame.cpp" />
     <ClCompile Include="src\conndiag.cpp" />
     <ClCompile Include="src\histdiag.cpp" />
+    <ClCompile Include="src\history.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine.h" />
@@ -23,6 +24,8 @@
     <ClInclude Include="src\frame.h" />
     <ClInclude Include="src\conndiag.h" />
     <ClInclude Include="src\histdiag.h" />
+    <ClInclude Include="src\history.h" />
+    <ClInclude Include="src\protocol.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

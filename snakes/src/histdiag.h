@@ -2,6 +2,7 @@
 
 #include <wx/wx.h>
 
+#include "history.h"
 
 namespace snakes
 {
@@ -19,10 +20,7 @@ namespace snakes
 
 	public:
 
-		HistoryDialog(wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Past Games"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxDEFAULT_DIALOG_STYLE);
-
-		~HistoryDialog();
-
+		HistoryDialog(wxWindow* parent, HistoryManager* history);
 	};
 
 }
