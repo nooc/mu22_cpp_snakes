@@ -5,7 +5,8 @@
 
 using namespace snakes;
 
-HistoryDialog::HistoryDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) : wxDialog(parent, id, title, pos, size, style)
+HistoryDialog::HistoryDialog(wxWindow* parent, HistoryManager* history)
+	: wxDialog(parent, wxID_ANY, wxT("Past Games"))
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -20,20 +21,12 @@ HistoryDialog::HistoryDialog(wxWindow* parent, wxWindowID id, const wxString& ti
 	m_button6 = new wxButton(this, wxID_OK, wxT("Close"), wxDefaultPosition, wxDefaultSize, 0);
 	bSizer6->Add(m_button6, 0, wxALL | wxEXPAND, 5);
 
+	//m_listBox1.
 
 	this->SetSizer(bSizer6);
 	this->Layout();
 	bSizer6->Fit(this);
 
 	this->Centre(wxBOTH);
-
-	// Connect Events
-	//m_button6->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(HistoryDialog::handleClose), NULL, this);
 }
 
-HistoryDialog::~HistoryDialog()
-{
-	// Disconnect Events
-	//m_button6->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(HistoryDialog::handleClose), NULL, this);
-
-}

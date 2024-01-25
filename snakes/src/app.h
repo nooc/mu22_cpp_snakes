@@ -8,7 +8,8 @@ namespace snakes {
     class App : public wxApp
     {
     public:
-        virtual bool OnInit();
+        bool OnInit();
+        int OnExit();
     };
 
 }
