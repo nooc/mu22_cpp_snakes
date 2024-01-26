@@ -55,7 +55,8 @@ struct SnakeEngine : Engine
 	// event target
 	wxEvtHandler* m_handler;
 	// game board of cells
-	std::vector<char> m_board;
+	char* m_board;
+	int m_boardSize;
 	// map of players
 	PlayerMap m_players;
 	// convenience pointer to local player object (included in m_players)
@@ -67,33 +68,42 @@ struct SnakeEngine : Engine
 	std::random_device m_rd;
 	std::mt19937 m_gen; // mersenne_twister_engine seeded with rd()
 
-	const int m_cellCount;
-
 	SnakeEngine(wxEvtHandler* handler, bool host=false)
-		: m_handler(handler), m_host(host),
-		m_board(std::pow(GAME_CELL_SIZE * GAME_LINE_SIZE,2)),
+		: m_handler(handler),
+		m_host(host),
 		m_ok(false),
 		m_playing(false),
-		m_gen(m_rd()),
-		m_cellCount(GAME_LINE_SIZE* GAME_LINE_SIZE)
+		m_gen(m_rd())
 	{
+		m_boardSize = GAME_LINE_SIZE * GAME_LINE_SIZE;
+		m_board = new char[m_boardSize];
 		ResetBoard();
 	}
-	virtual ~SnakeEngine() {}
+	virtual ~SnakeEngine()
+	{
+		delete[] m_board;
+	}
 
 	virtual void ProcessTick() {}
+
+	void ConfigSocket(wxSocketBase* sock)
+	{
+		sock->SetNotify(SOCKET_FLAGS);
+		sock->SetEventHandler(*m_handler);
+		sock->Notify(true);
+		sock->SetTimeout(3);
+	}
 
 	/// <summary>
 	/// Set board cells to zero.
 	/// </summary>
 	void ResetBoard()
 	{
-		char* b = m_board.data();
-		for (int i = 0, j = m_board.capacity(); i < j; i++) b[i] = 0;
+		for (int i = 0, j = m_boardSize; i < j; i++) m_board[i] = 0;
 	}
 
 	/// <summary>
-	/// pmove players to appropriate starting positions
+	/// move players to appropriate starting positions and set color
 	/// </summary>
 	void ArrangePlayers() {
 		int quat = GAME_LINE_SIZE / 4;
@@ -104,6 +114,7 @@ struct SnakeEngine : Engine
 			int row = iterPos / 2;
 			int col = iterPos % 2;
 			i->second->snake.back().set(quat + col* half, quat + row * half);
+			i->second->color = 1 + iterPos;
 			iterPos++;
 		}
 		SendPlayers();
@@ -113,14 +124,12 @@ struct SnakeEngine : Engine
 	/// Add a player to the game and readjust starting positions if >= 2.
 	/// If socket is null, this is the local player
 	/// </summary>
-	void AddPlayer(int id, wxSocketBase*socket)
+	PlayerImpl* AddPlayer(int id, wxSocketBase*socket)
 	{
 		std::uniform_int_distribution<> distrib(0, 3);
 		auto player = new PlayerImpl(id, GAME_LINE_SIZE / 2, GAME_LINE_SIZE / 2, (Direction)distrib(m_gen), socket);
 		PlayerPtr ptr(player);
 		m_players[id] = ptr;
-		if(m_host) player->color = m_players.size(); // color based on list position
-		if (m_players.size()==1) m_me = player;
 		// send id
 		if (m_host && socket)
 		{
@@ -132,6 +141,7 @@ struct SnakeEngine : Engine
 		}
 		// adjust positions if 2, 3 or 4 players
 		if (m_host && m_players.size() > 1) ArrangePlayers();
+		return player;
 	}
 
 	/// <summary>
@@ -143,14 +153,14 @@ struct SnakeEngine : Engine
 		for (int i = 0; i < m.count; i++)
 		{
 			PlayerMessage& pm = m.players[i];
-			if (m_players.find(pm.id) == m_players.end())
-			{
-				AddPlayer(pm.id, NULL);
-				PlayerImpl& p = (PlayerImpl&)*m_players[pm.id];
-				p.snake.back() = pm.pos;
-				p.color = pm.color;
-				p.dir = pm.dir;
-			}
+			PlayerImpl* p;
+			auto pptri = m_players.find(pm.id);
+			if (pptri == m_players.end())
+				p = AddPlayer(pm.id, NULL);
+			else p = (PlayerImpl*)pptri->second.get();
+			p->snake.back() = pm.pos;
+			p->color = pm.color;
+			p->dir = pm.dir;
 		}
 	}
 
@@ -162,7 +172,8 @@ struct SnakeEngine : Engine
 		Message m;
 		m.body.players.count = m_players.size();
 		m.header.type = MessageType::PLAYERS;
-		m.header.size = sizeof(PlayersMessage) - (sizeof(PlayerMessage) * (4 - m.body.players.count)); // only send pos eq to amount of players (max 4)
+		m.header.size = sizeof(m.body.players.count) + sizeof(PlayerMessage) * m.body.players.count; // only send pos eq to amount of players (max 4)
+		m.body.players.count = m_players.size();
 		int idx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
@@ -184,14 +195,13 @@ struct SnakeEngine : Engine
 
 	void AddFood()
 	{
-		std::uniform_int_distribution<> distrib(0, m_cellCount-1);
-		char* cellArray = m_board.data();
+		std::uniform_int_distribution<> distrib(0, m_boardSize-1);
 		int cell;
 		do
 		{
 			cell = distrib(m_gen);
-		} while (cellArray[cell] != 0);
-		cellArray[cell] = FOOD_VALUE;
+		} while (m_board[cell] != 0);
+		m_board[cell] = FOOD_VALUE;
 		// send to clients
 		Message m;
 		m.header.type = MessageType::FOOD;
@@ -204,9 +214,9 @@ struct SnakeEngine : Engine
 		}
 	}
 
-	char* GetBoard()
+	char* GetBoard() const
 	{
-		return m_board.data();
+		return m_board;
 	}
 
 	bool IsOk() { return m_ok; }
@@ -225,25 +235,28 @@ struct SnakeEngine : Engine
 	/// <param name="advance"></param>
 	void DoAdvance(AdvanceMessage& advance)
 	{
-		char* board = m_board.data();
 		for (int i = 0; i < advance.count; i++)
 		{
+			auto playerPtr = m_players.find(advance.posgrow[i].id);
+			if (playerPtr == m_players.end()) continue;
+
 			PosGrow& pg = advance.posgrow[i];
-			PlayerImpl& p = (PlayerImpl&)*m_players[pg.id];
-			p.snake.push_back(pg.pos);
-			board[pg.pos.y * GAME_LINE_SIZE + pg.pos.x] = p.color;
+			PlayerImpl& player = (PlayerImpl&)*playerPtr->second;
+			player.snake.push_back(pg.pos);
+			m_board[pg.pos.y * GAME_LINE_SIZE + pg.pos.x] = player.color;
 			if (!pg.grow)
 			{
-				Position& old = p.snake.front();
-				board[old.y * GAME_LINE_SIZE + old.x] = 0;
-				p.snake.pop_front();
+				Position& old = player.snake.front();
+				m_board[old.y * GAME_LINE_SIZE + old.x] = 0;
+				player.snake.pop_front();
 			}
 		}
+		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_REFRESH));
 	}
 
 	void PlaceFood(FoodMessage& food)
 	{
-		m_board.at(food.pos.y * GAME_LINE_SIZE + food.pos.x) = FOOD_VALUE;
+		m_board[food.pos.y * GAME_LINE_SIZE + food.pos.x] = FOOD_VALUE;
 	}
 
 	void ReadData(wxSocketBase* sock)
@@ -259,8 +272,9 @@ struct SnakeEngine : Engine
 			break;
 		case MessageType::FOOD:
 			PlaceFood(m.body.food);
+			break;
 		case MessageType::DEAD:
-			m_playing = false;
+			p.alive = false;
 			break;
 		case MessageType::START:
 			m_playing = true;
@@ -270,7 +284,7 @@ struct SnakeEngine : Engine
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_END));
 			break;
 		case MessageType::ID:
-			AddPlayer(m.body.id.id, NULL); // cient adds self
+			m_me = AddPlayer(m.body.id.id, NULL); // cient adds self
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_ASK_READY));
 			break;
 		case MessageType::PLAYERS:
@@ -316,7 +330,7 @@ struct HostSnakeEngine : SnakeEngine
 		m_listening->SetEventHandler(*handler);
 		m_listening->Notify(true);
 		m_ok = m_listening->IsOk();
-		AddPlayer(0, NULL);
+		m_me = AddPlayer(0, NULL);
 
 		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_ASK_READY));
 	}
@@ -357,6 +371,7 @@ struct HostSnakeEngine : SnakeEngine
 			if (m_players.size() < 4)
 			{
 				wxSocketBase* sock = m_listening->Accept(false);
+				ConfigSocket(sock);
 				if(sock) AddPlayer(sock->GetSocket(), sock);
 			}
 			break;
@@ -367,14 +382,14 @@ struct HostSnakeEngine : SnakeEngine
 
 	int GetCellValue(const Position& pos)
 	{
-		return m_board.at(pos.y * GAME_LINE_SIZE + pos.x);
+		return m_board[pos.y * GAME_LINE_SIZE + pos.x];
 	}
 	void SetCellValue(const Position& pos, int value)
 	{
 		m_board[pos.y * GAME_LINE_SIZE + pos.x] = (char)value;
 	}
 
-	Position NextPos(const Position& pos, int dir, char* board)
+	Position NextPos(const Position& pos, int dir)
 	{
 		Position p;
 		int addX = 0, addY = 0;
@@ -406,15 +421,16 @@ struct HostSnakeEngine : SnakeEngine
 	{
 		Message m;
 		m.header.type = MessageType::ADVANCE;
-		m.header.size = sizeof(AdvanceMessage) - (4-m_players.size())*sizeof(PosGrow);
+		m.header.size = sizeof(m.body.advance.count) + m_players.size()*sizeof(PosGrow);
 		m.body.advance.count = m_players.size();
-		int idx=0;
+		int idx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 			m.body.advance.posgrow[idx].grow = p.grow;
 			m.body.advance.posgrow[idx].id = p.id;
 			m.body.advance.posgrow[idx].pos = p.snake.back();
+			idx++;
 		}
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
@@ -430,7 +446,7 @@ struct HostSnakeEngine : SnakeEngine
 	{
 		Message m;
 		m.header.type = MessageType::END;
-		m.header.size = sizeof(EndMessage) -(sizeof(PlayerScore)*(4-m_players.size())); // only send scores eq to amount of players (max 4)
+		m.header.size = sizeof(m.body.end.count)  + sizeof(PlayerScore)*m_players.size(); // only send scores eq to amount of players (max 4)
 		m.body.end.count = m_players.size();
 		int pIdx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
@@ -452,14 +468,13 @@ struct HostSnakeEngine : SnakeEngine
 
 	void ProcessTick()
 	{
-		char* board = m_board.data();
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
 			// get player object
 			PlayerImpl& player = (PlayerImpl&)(*i->second);
 			if (!player.alive) continue;
 			// next cell
-			Position next = NextPos(player.snake.back(), player.dir, board);
+			Position next = NextPos(player.snake.back(), player.dir);
 			int cell = GetCellValue(next);
 			bool food = cell == FOOD_VALUE;
 			if (food) AddFood();
@@ -472,12 +487,12 @@ struct HostSnakeEngine : SnakeEngine
 			}
 			// advance
 			player.snake.push_back(next);
-			board[next.y * GAME_LINE_SIZE + next.x] = player.color;
+			m_board[next.y * GAME_LINE_SIZE + next.x] = player.color;
 			// pop oldest cell if not growing
 			if (!player.grow)
 			{
 				Position& old = player.snake.front();
-				board[old.y * GAME_LINE_SIZE + old.x] = 0;
+				m_board[old.y * GAME_LINE_SIZE + old.x] = 0;
 				player.snake.pop_front();
 			}
 			player.grow = food;
@@ -571,10 +586,7 @@ struct ClientSnakeEngine : SnakeEngine
 	ClientSnakeEngine(const wxString& connectionString, wxEvtHandler* handler) : SnakeEngine(handler)
 	{
 		m_connection = new wxSocketClient();
-		m_connection->SetNotify(SOCKET_FLAGS);
-		m_connection->SetEventHandler(*handler);
-		m_connection->Notify(true);
-		m_connection->SetTimeout(3);
+		ConfigSocket(m_connection);
 		m_connection->Connect(getAddr(connectionString),false);
 	}
 	~ClientSnakeEngine()
@@ -630,6 +642,7 @@ struct ClientSnakeEngine : SnakeEngine
 			m.header.type = MessageType::TURN;
 			m.header.size = sizeof(TurnMessage);
 			m.body.turn.dir = dir;
+			m.body.turn.request = true;
 			m_connection->Write(&m, sizeof(m.header) + m.header.size);
 		}
 	}

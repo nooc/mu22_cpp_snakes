@@ -100,7 +100,12 @@ MainFrame::~MainFrame()
 void MainFrame::OnEngineEvent(EngineEvent& event)
 {
 	auto eevt = event.GetEngineEvent();
-	if (eevt == EET_ASK_READY)
+	if (eevt == EET_REFRESH)
+	{
+		// client event
+		m_gameView->Refresh(false);
+	}
+	else if (eevt == EET_ASK_READY)
 	{
 		wxMessageBox(wxT("Hit Ok when ready?"), wxT("Ready Chech"));
 		m_game->Ready();
