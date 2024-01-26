@@ -121,9 +121,11 @@ struct SnakeEngine : Engine
 	}
 
 	/// <summary>
-	/// Add a player to the game and readjust starting positions if >= 2.
-	/// If socket is null, this is the local player
+	/// Add a player to the game and then call ArrangePlayers().
 	/// </summary>
+	/// <param name="id">Player id. Same as socket id on host side.</param>
+	/// <param name="socket">Socket or null</param>
+	/// <returns>Created player</returns>
 	PlayerImpl* AddPlayer(int id, wxSocketBase*socket)
 	{
 		std::uniform_int_distribution<> distrib(0, 3);
