@@ -5,7 +5,7 @@
 
 using namespace snakes;
 
-HistoryDialog::HistoryDialog(wxWindow* parent, HistoryManager* history)
+HistoryDialog::HistoryDialog(wxWindow* parent, HistoryManager& history)
 	: wxDialog(parent, wxID_ANY, wxT("Past Games"))
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
@@ -15,6 +15,11 @@ HistoryDialog::HistoryDialog(wxWindow* parent, HistoryManager* history)
 
 	m_listBox1 = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL, 0);
 	m_listBox1->SetMinSize(wxSize(300, 200));
+	auto hist = history.GetAll();
+	for (auto i = hist.begin(), j = hist.end(); i != j; i++)
+	{
+		m_listBox1->AppendString(*i);
+	}
 
 	bSizer6->Add(m_listBox1, 0, wxALL, 5);
 

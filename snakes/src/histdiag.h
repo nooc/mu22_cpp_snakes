@@ -20,7 +20,7 @@ namespace snakes
 
 	public:
 
-		HistoryDialog(wxWindow* parent, HistoryManager* history);
+		HistoryDialog(wxWindow* parent, HistoryManager& history);
 	};
 
 }

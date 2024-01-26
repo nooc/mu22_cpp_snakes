@@ -5,13 +5,15 @@
 #include <wx/fileconf.h>
 
 #include "engine.h"
+#include "history.h"
 
 namespace snakes
 {
 	enum {
 		BTN_CONNECT = 1000,
 		BTN_HOST,
-		BTN_HISTORY
+		BTN_HISTORY,
+		BTN_DISCONNECT
 	};
 
 	class MainFrame : public wxFrame
@@ -19,9 +21,10 @@ namespace snakes
 		private:
 			wxFileConfig m_cfg;
 			Engine* m_game;
+			HistoryManager m_hist;
 
 			wxPanel* m_gameView;
-			wxListView* m_scorelist;
+			wxListBox* m_scorelist;
 			wxButton* m_historyButton;
 			wxButton* m_connectButton;
 			wxButton* m_hotsButton;
