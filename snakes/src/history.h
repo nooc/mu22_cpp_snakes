@@ -7,6 +7,7 @@ namespace snakes {
 
 	class HistoryManager
 	{
+		wxString m_file;
 		std::vector<wxString> m_hist;
 	public:
 		HistoryManager(const wxString& fileName);
@@ -14,5 +15,6 @@ namespace snakes {
 
 		void Add(const wxString& line);
 		void Save();
+		std::vector<wxString> GetAll() const { return m_hist; }
 	};
 }

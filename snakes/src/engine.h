@@ -51,25 +51,18 @@ namespace snakes {
 		ET_HOST
 	};
 
-	struct BoardPos
-	{
-		short x, y;
-
-		BoardPos(short _x, short _y) : x(_x),y(_y) {}
-		BoardPos(const BoardPos& pos) : x(pos.x), y(pos.y) {}
-	};
-
 	struct Player
 	{
 		short id;
+		short color;
 		Direction dir;
 		bool alive;
 		bool ready;
 		bool grow;
-		std::list<BoardPos> snake;
+		std::list<Position> snake;
 
-		Player(short _id, short x, short y, short _dir) : id(_id), dir(_dir), alive(false),grow(false),ready(false) {
-			snake.push_back(BoardPos(x, y));
+		Player(short _id, short x, short y, Direction _dir) : id(_id), color(0), dir(_dir), alive(false),grow(false),ready(false) {
+			snake.push_back(Position().set(x, y));
 		}
 		virtual ~Player() {}
 
@@ -86,6 +79,7 @@ namespace snakes {
 		virtual PlayerMap& GetPlayers() = 0;
 		virtual char* GetBoard() = 0;
 		virtual void Ready() = 0;
+		virtual void Start() {} // for host
 		virtual void Turn(Direction dir) = 0;
 	};
 

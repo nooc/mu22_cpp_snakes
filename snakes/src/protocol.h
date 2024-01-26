@@ -13,8 +13,9 @@ namespace snakes {
 		PLAYERS, // server->clientS announce players
 		READY, // client->server mark as ready for game round
 		TURN, // client->server request, server->clientS update
+		START, // server->clientS end round
 		END, // server->clientS end round
-		CHAT // client->server chat, server->clientS
+		FOOD // server->clientS food cell
 	};
 
 	// Move direction
@@ -26,6 +27,13 @@ namespace snakes {
 		DIR_DOWN
 	};
 
+	struct Position
+	{
+		short x, y;
+		Position& operator=(const Position& pos) { x = pos.x; y = pos.y; return *this; }
+		Position& set(short _x, short _y) { x = _x; y = _y; return *this; }
+	};
+	
 	// Player score where score is snake length.
 	struct PlayerScore
 	{
@@ -42,7 +50,18 @@ namespace snakes {
 	struct PosMessage
 	{
 		int id;
-		wxUint16 x, y;
+		Position pos;
+	};
+
+	struct FoodMessage
+	{
+		Position pos;
+	};
+
+	struct PlayerMessage : PosMessage
+	{
+		int color;
+		Direction dir;
 	};
 
 	struct IDMessage
@@ -53,18 +72,24 @@ namespace snakes {
 	struct PlayersMessage
 	{
 		wxUint16 count;
-		PosMessage players[4];
+		PlayerMessage players[4];
 	};
 
 	struct TurnMessage
 	{
+		bool request;
 		Direction dir; // TurnDirection
+	};
+
+	struct PosGrow : PosMessage
+	{
+		bool grow;
 	};
 
 	struct AdvanceMessage
 	{
-		PosMessage pos;
-		bool grow;
+		wxUint16 count;
+		PosGrow posgrow[4];
 	};
 
 	struct EndMessage
@@ -82,6 +107,8 @@ namespace snakes {
 			TurnMessage turn;
 			EndMessage end;
 			AdvanceMessage advance;
+			PosMessage position;
+			FoodMessage food;
 		} body;
 	};
 }

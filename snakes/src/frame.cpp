@@ -10,13 +10,13 @@
 using namespace snakes;
 
 static const wxColor s_foodColor = wxColor(0xFF1493);
-static const wxPen* s_pens[] = {wxBLACK_PEN, wxGREEN_PEN, wxBLUE_PEN, wxYELLOW_PEN, wxRED_PEN };
+static const wxPen* s_pens[] = { wxBLACK_PEN, wxGREEN_PEN, wxBLUE_PEN, wxYELLOW_PEN, wxRED_PEN };
 static const wxBrush* s_brushes[] = { wxBLACK_BRUSH, wxGREEN_BRUSH, wxBLUE_BRUSH, wxYELLOW_BRUSH, wxRED_BRUSH };
 
 MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& size, long style)
 	: wxFrame(0L, wxID_ANY, title, pos, size, style),
 	m_cfg("snakes", wxEmptyString, "snakes.cfg", wxEmptyString, wxCONFIG_USE_LOCAL_FILE),
-	m_game(NULL)
+	m_game(NULL), m_hist(wxT("history.txt"))
 {
 	SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -36,7 +36,7 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 
 	wxStaticBoxSizer* sbSizer2 = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("Scores")), wxHORIZONTAL);
 
-	m_scorelist = new wxListView(sbSizer2->GetStaticBox());
+	m_scorelist = new wxListBox(sbSizer2->GetStaticBox(),wxID_ANY);
 	sbSizer2->Add(m_scorelist, 1, wxALL, 5);
 
 	m_historyButton = new wxButton(sbSizer2->GetStaticBox(), BTN_HISTORY, wxT("History"), wxDefaultPosition, wxDefaultSize, 0);
@@ -56,7 +56,8 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 
 	sbSizer1->Add(bSizer5, 1, wxEXPAND, 5);
 
-	m_disconnectButton = new wxButton(sbSizer1->GetStaticBox(), wxID_ANY, wxT("Disconnected"), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
+	m_disconnectButton = new wxButton(sbSizer1->GetStaticBox(), BTN_DISCONNECT, wxT("Disconnected"), wxDefaultPosition, wxDefaultSize, 0);
+	m_disconnectButton->Enable(false);
 	sbSizer1->Add(m_disconnectButton, 0, wxALL | wxEXPAND, 5);
 
 	bSizer2->Add(sbSizer1, 0, wxALL | wxEXPAND, 5);
@@ -77,6 +78,8 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_historyButton->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(MainFrame::ShowHistory), NULL, this);
 	m_gameView->Connect(wxID_ANY, wxEVT_KEY_DOWN, wxKeyEventHandler(MainFrame::ProcessKeyInput), 0, this);
 	Bind(ENGINE_EVENT, &MainFrame::OnEngineEvent, this);
+	Bind(wxEVT_TIMER, &MainFrame::ProcessTick, this);
+	Bind(wxEVT_SOCKET, &MainFrame::ProcessSocket, this);
 }
 
 MainFrame::~MainFrame()
@@ -90,6 +93,8 @@ MainFrame::~MainFrame()
 	m_historyButton->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(MainFrame::ShowHistory), NULL, this);
 	m_gameView->Disconnect(wxID_ANY, wxEVT_KEY_DOWN, wxKeyEventHandler(MainFrame::ProcessKeyInput), 0, this);
 	Unbind(ENGINE_EVENT, &MainFrame::OnEngineEvent, this);
+	Unbind(wxEVT_TIMER, &MainFrame::ProcessTick, this);
+	Unbind(wxEVT_SOCKET, &MainFrame::ProcessSocket, this);
 }
 
 void MainFrame::OnEngineEvent(EngineEvent& event)
@@ -102,11 +107,27 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 	}
 	else if (eevt == EET_START)
 	{
-		// do we need to do anythiong here?
+		// host specific
+		m_game->Start();
 	}
 	else if (eevt == EET_END)
 	{
+		m_scorelist->Clear();
+		PlayerMap& players = m_game->GetPlayers();
+		wxString score;
+		for (auto i = players.begin(), j = players.end(); i != j; i++)
+		{
+			Player& p = *i->second;
+			if (!score.empty()) score << wxT(" - ");
+			wxString playerScore = wxString() << p.color << wxT(": ") << p.snake.size();
+			score << playerScore;
+			m_scorelist->Append(playerScore);
+
+		}
 		// store score
+		m_hist.Add(score);
+		m_hist.Save();
+		wxMessageBox(score, wxT("Score"));
 	}
 	else if (eevt == EET_TERMINATE)
 	{
@@ -145,7 +166,7 @@ void MainFrame::ProcessKeyInput(wxKeyEvent& event)
 void MainFrame::ProcessTick(wxTimerEvent& event)
 {
 	m_game->ProcessTick();
-	m_gameView->Refresh();
+	m_gameView->Refresh(false);
 }
 
 void MainFrame::ProcessSocket(wxSocketEvent& event)
@@ -199,6 +220,7 @@ void MainFrame::_CreateGame(EngineType mode)
 	{
 		_EnableConnectButtons(false);
 		m_game = EngineFactory::Create(mode, dlg.GetValue(), this);
+		m_gameView->Refresh();
 	}
 }
 
@@ -220,11 +242,12 @@ void MainFrame::DisconnectGame(wxCommandEvent& event)
 		m_game = NULL;
 	}
 	_EnableConnectButtons(true);
+	m_gameView->Refresh();
 }
 
 void MainFrame::ShowHistory(wxCommandEvent& event)
 {
-	HistoryDialog dlg(this, NULL);
+	HistoryDialog dlg(this, m_hist);
 	dlg.ShowModal();
 }
 
