@@ -100,10 +100,14 @@ MainFrame::~MainFrame()
 void MainFrame::OnEngineEvent(EngineEvent& event)
 {
 	auto eevt = event.GetEngineEvent();
-	if (eevt == EET_ASK_READY)
+	if (eevt == EET_REFRESH)
 	{
-		wxMessageBox(wxT("Hit Ok when ready?"), wxT("Ready Chech"));
-		m_game->Ready();
+		// client event
+		m_gameView->Refresh(false);
+	}
+	else if (eevt == EET_ASK_READY)
+	{
+		AskReady();
 	}
 	else if (eevt == EET_START)
 	{
@@ -127,7 +131,8 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 		// store score
 		m_hist.Add(score);
 		m_hist.Save();
-		wxMessageBox(score, wxT("Score"));
+		
+		AskReady();
 	}
 	else if (eevt == EET_TERMINATE)
 	{
@@ -136,6 +141,12 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 		m_game = NULL;
 		_EnableConnectButtons(true);
 	}
+}
+
+void MainFrame::AskReady()
+{
+	wxMessageBox(wxT("Hit Ok when ready?"), wxT("Ready Check"));
+	m_game->Ready();
 }
 
 void MainFrame::ProcessKeyInput(wxKeyEvent& event)

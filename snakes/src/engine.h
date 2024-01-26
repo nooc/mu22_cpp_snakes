@@ -21,7 +21,8 @@ namespace snakes {
 		EET_ASK_READY,
 		EET_START,
 		EET_END,
-		EET_TERMINATE
+		EET_TERMINATE,
+		EET_REFRESH
 	};
 
 	class EngineEvent : public wxEvent
@@ -36,7 +37,6 @@ namespace snakes {
 		EngineEventType GetEngineEvent();
 		wxDECLARE_DYNAMIC_CLASS(EngineEvent);
 	};
-	//typedef void (wxEvtHandler::* EngineEventFunction)(EngineEvent&);
 
 	// Size of a game block
 	#define GAME_CELL_SIZE 10
@@ -77,7 +77,7 @@ namespace snakes {
 		virtual bool IsOk() = 0;
 		virtual bool IsPlaying() = 0;
 		virtual PlayerMap& GetPlayers() = 0;
-		virtual char* GetBoard() = 0;
+		virtual char* GetBoard() const = 0;
 		virtual void Ready() = 0;
 		virtual void Start() {} // for host
 		virtual void Turn(Direction dir) = 0;

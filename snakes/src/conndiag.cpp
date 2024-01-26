@@ -19,7 +19,7 @@ ConnectionDialog::ConnectionDialog( wxWindow* parent, EngineType mode, wxConfigB
 		wxVERTICAL );
 	
 	m_textCtrl1 = new wxTextCtrl( sbSizer3->GetStaticBox(), wxID_ANY,
-		config.Read(mode == ET_CLIENT ? "LastClientStrng" : "LastHostStrng", mode == ET_CLIENT ? wxEmptyString : wxT("0.0.0.0:7173")),
+		config.Read(mode == ET_CLIENT ? "LastClientStrng" : "LastHostStrng", mode == ET_CLIENT ? wxT("127.0.0.1:7173") : wxT("0.0.0.0:7173")),
 		wxDefaultPosition, wxSize( 200,-1 ), wxTE_CENTER );
 	#ifdef __WXGTK__
 	if ( !m_textCtrl1->HasFlag( wxTE_MULTILINE ) )
