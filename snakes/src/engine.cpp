@@ -152,13 +152,14 @@ struct SnakeEngine : Engine
 	{
 		for (int i = 0; i < m.count; i++)
 		{
-			PlayerMessage& pm = m.players[i];
+			PlayerMessage& pm = m.player[i];
 			PlayerImpl* p;
 			auto pptri = m_players.find(pm.id);
 			if (pptri == m_players.end())
 				p = AddPlayer(pm.id, NULL);
 			else p = (PlayerImpl*)pptri->second.get();
-			p->snake.back() = pm.pos;
+			p->snake.clear();
+  			p->snake.push_back(pm.pos);
 			p->color = pm.color;
 			p->dir = pm.dir;
 		}
@@ -177,8 +178,8 @@ struct SnakeEngine : Engine
 		int idx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
-			PlayerMessage& pcm = m.body.players.players[idx];
-			pcm.id = i->first;
+			PlayerMessage& pcm = m.body.players.player[idx++];
+			pcm.id = i->second->id;
 			pcm.pos = i->second->snake.back();
 			pcm.color = i->second->color;
 		}
@@ -262,7 +263,10 @@ struct SnakeEngine : Engine
 	void ReadData(wxSocketBase* sock)
 	{
 		Message m;
-		PlayerImpl& p = (PlayerImpl&)*m_players[sock->GetSocket()];
+		PlayerImpl* p;
+		auto ppti = m_players.find(sock->GetSocket());
+		p = ppti == m_players.end() ? NULL : (PlayerImpl*)ppti->second.get();
+
 		sock->Read(&m, sizeof(MessageHeader));
 		if(m.header.size!=0) sock->Read(&m.body, m.header.size);
 		switch (m.header.type)
@@ -274,7 +278,7 @@ struct SnakeEngine : Engine
 			PlaceFood(m.body.food);
 			break;
 		case MessageType::DEAD:
-			p.alive = false;
+			if(p) p->alive = false;
 			break;
 		case MessageType::START:
 			m_playing = true;
@@ -300,8 +304,8 @@ struct SnakeEngine : Engine
 		case MessageType::TURN:
 			if (m.body.turn.request)
 			{
-				p.dir = m.body.turn.dir;
-				EchoTurn(p,m);
+				p->dir = m.body.turn.dir;
+				EchoTurn(*p,m);
 			}
 			else
 			{
@@ -330,7 +334,7 @@ struct HostSnakeEngine : SnakeEngine
 		m_listening->SetEventHandler(*handler);
 		m_listening->Notify(true);
 		m_ok = m_listening->IsOk();
-		m_me = AddPlayer(0, NULL);
+		m_me = AddPlayer(m_listening->GetSocket(), NULL);
 
 		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_ASK_READY));
 	}
@@ -371,8 +375,11 @@ struct HostSnakeEngine : SnakeEngine
 			if (m_players.size() < 4)
 			{
 				wxSocketBase* sock = m_listening->Accept(false);
-				ConfigSocket(sock);
-				if(sock) AddPlayer(sock->GetSocket(), sock);
+				if (sock)
+				{
+					ConfigSocket(sock);
+					AddPlayer(sock->GetSocket(), sock);
+				}
 			}
 			break;
 		default:

@@ -44,7 +44,7 @@ namespace snakes {
 	struct MessageHeader
 	{
 		MessageType type; // MessageType
-		wxUint16 size; // byte size
+		short size; // byte size
 	};
 
 	struct PosMessage
@@ -60,7 +60,7 @@ namespace snakes {
 
 	struct PlayerMessage : PosMessage
 	{
-		int color;
+		short color;
 		Direction dir;
 	};
 
@@ -71,8 +71,8 @@ namespace snakes {
 
 	struct PlayersMessage
 	{
-		wxUint16 count;
-		PlayerMessage players[4];
+		short count;
+		PlayerMessage player[4];
 	};
 
 	struct TurnMessage
@@ -88,13 +88,13 @@ namespace snakes {
 
 	struct AdvanceMessage
 	{
-		wxUint16 count;
+		short count;
 		PosGrow posgrow[4];
 	};
 
 	struct EndMessage
 	{
-		wxUint16 count;
+		short count;
 		PlayerScore score[4];
 	};
 
