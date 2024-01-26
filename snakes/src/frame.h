@@ -40,6 +40,7 @@ namespace snakes
 			void ProcessTick(wxTimerEvent& event);
 			void OnEngineEvent(EngineEvent& event);
 
+			void AskReady();
 			void _EnableConnectButtons(bool ebabled);
 			void _CreateGame(EngineType mode);
 		public:

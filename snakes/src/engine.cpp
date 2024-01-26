@@ -152,6 +152,7 @@ struct SnakeEngine : Engine
 	/// <param name="m"></param>
 	void GetPlayerList(PlayersMessage& m)
 	{
+		ResetBoard();
 		for (int i = 0; i < m.count; i++)
 		{
 			PlayerMessage& pm = m.player[i];
@@ -164,6 +165,7 @@ struct SnakeEngine : Engine
   			p->snake.push_back(pm.pos);
 			p->color = pm.color;
 			p->dir = pm.dir;
+			m_board[pm.pos.y * GAME_LINE_SIZE + pm.pos.x] = pm.color;
 		}
 	}
 
@@ -287,6 +289,11 @@ struct SnakeEngine : Engine
 			break;
 		case MessageType::END:
 			m_playing = false;
+			for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+			{
+				i->second->grow = false;
+				i->second->ready = false;
+			}
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_END));
 			break;
 		case MessageType::ID:
@@ -304,10 +311,10 @@ struct SnakeEngine : Engine
 			TestReady();
 			break;
 		case MessageType::TURN:
-			if (m.body.turn.request)
+			if (m.body.turn.request && p)
 			{
 				p->dir = m.body.turn.dir;
-				EchoTurn(*p,m);
+				EchoTurn(*p, m);
 			}
 			else
 			{
@@ -431,16 +438,18 @@ struct HostSnakeEngine : SnakeEngine
 		Message m;
 		m.header.type = MessageType::ADVANCE;
 		m.header.size = sizeof(m.body.advance.count) + m_players.size()*sizeof(PosGrow);
-		m.body.advance.count = m_players.size();
+
 		int idx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
+			if (!p.alive) continue;
 			m.body.advance.posgrow[idx].grow = p.grow;
 			m.body.advance.posgrow[idx].id = p.id;
 			m.body.advance.posgrow[idx].pos = p.snake.back();
 			idx++;
 		}
+		m.body.advance.count = idx;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
@@ -460,6 +469,10 @@ struct HostSnakeEngine : SnakeEngine
 		int pIdx = 0;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
+			// reset
+			i->second->grow = false;
+			i->second->ready = false;
+			// set score
 			PlayerScore& score = m.body.end.score[pIdx++];
 			score.id = i->second->id;
 			score.score = i->second->snake.size();
@@ -487,9 +500,9 @@ struct HostSnakeEngine : SnakeEngine
 			int cell = GetCellValue(next);
 			bool food = cell == FOOD_VALUE;
 			if (food) AddFood();
-			// dead
-			if (!food && cell != 0)
+			else if (cell != 0)
 			{
+				// dead
 				player.alive = false;
 				SendDead(player);
 				continue;
@@ -514,6 +527,7 @@ struct HostSnakeEngine : SnakeEngine
 			if (i->second->alive) return;
 		}
 		// nobody alive. end
+		m_playing = false;
 		m_timer.Stop();
 		SendEnd();
 		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_END));
