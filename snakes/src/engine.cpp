@@ -13,6 +13,8 @@ using namespace snakes;
 // socket event flags
 #define SOCKET_FLAGS wxSOCKET_INPUT_FLAG | wxSOCKET_CONNECTION_FLAG | wxSOCKET_LOST_FLAG
 
+#define TIMER_INTERVALL 120
+
 EngineEvent::EngineEvent(EngineEventType type, int winId) : m_type(type), wxEvent(winId, ENGINE_EVENT) { }
 EngineEvent::EngineEvent(const EngineEvent& event) : wxEvent(event)
 {
@@ -59,6 +61,8 @@ struct SnakeEngine : Engine
 	int m_boardSize;
 	// map of players
 	PlayerMap m_players;
+	// food on board
+	FoodMap m_food;
 	// convenience pointer to local player object (included in m_players)
 	PlayerImpl* m_me;
 	bool m_ok;
@@ -100,6 +104,12 @@ struct SnakeEngine : Engine
 	void ResetBoard()
 	{
 		for (int i = 0, j = m_boardSize; i < j; i++) m_board[i] = 0;
+		m_food.clear();
+	}
+
+	FoodMap& GetFood() const
+	{
+		return const_cast<FoodMap&>(m_food);
 	}
 
 	/// <summary>
@@ -165,7 +175,7 @@ struct SnakeEngine : Engine
   			p->snake.push_back(pm.pos);
 			p->color = pm.color;
 			p->dir = pm.dir;
-			m_board[pm.pos.y * GAME_LINE_SIZE + pm.pos.x] = pm.color;
+			m_board[pm.pos.cell(GAME_LINE_SIZE)] = pm.color;
 		}
 	}
 
@@ -206,12 +216,15 @@ struct SnakeEngine : Engine
 		{
 			cell = distrib(m_gen);
 		} while (m_board[cell] != 0);
+		Position foodPos;
+		foodPos.set(cell % GAME_LINE_SIZE, cell / GAME_LINE_SIZE);
 		m_board[cell] = FOOD_VALUE;
+		m_food[cell] = foodPos;
 		// send to clients
 		Message m;
 		m.header.type = MessageType::FOOD;
 		m.header.size = sizeof(m.body.food);
-		m.body.food.pos.set(cell % GAME_LINE_SIZE, cell / GAME_LINE_SIZE);
+		m.body.food.pos = foodPos;
 		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
@@ -248,20 +261,25 @@ struct SnakeEngine : Engine
 			PosGrow& pg = advance.posgrow[i];
 			PlayerImpl& player = (PlayerImpl&)*playerPtr->second;
 			player.snake.push_back(pg.pos);
-			m_board[pg.pos.y * GAME_LINE_SIZE + pg.pos.x] = player.color;
+			int cell = pg.pos.cell(GAME_LINE_SIZE);
+			m_board[cell] = player.color;
 			if (!pg.grow)
 			{
 				Position& old = player.snake.front();
-				m_board[old.y * GAME_LINE_SIZE + old.x] = 0;
+				m_board[old.cell(GAME_LINE_SIZE)] = 0;
 				player.snake.pop_front();
 			}
+			// remove food from list
+			if (m_food.find(cell) != m_food.end()) m_food.erase(cell);
 		}
 		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_REFRESH));
 	}
 
 	void PlaceFood(FoodMessage& food)
 	{
-		m_board[food.pos.y * GAME_LINE_SIZE + food.pos.x] = FOOD_VALUE;
+		int cell = food.pos.cell(GAME_LINE_SIZE);
+		m_board[cell] = FOOD_VALUE;
+		m_food[cell] = food.pos;
 	}
 
 	void ReadData(wxSocketBase* sock)
@@ -356,7 +374,7 @@ struct HostSnakeEngine : SnakeEngine
 	}
 	void Start()
 	{
-		m_timer.Start();
+		m_timer.Start(TIMER_INTERVALL);
 	}
 
 	void Destroy()
@@ -394,15 +412,6 @@ struct HostSnakeEngine : SnakeEngine
 		default:
 			break;
 		}
-	}
-
-	int GetCellValue(const Position& pos)
-	{
-		return m_board[pos.y * GAME_LINE_SIZE + pos.x];
-	}
-	void SetCellValue(const Position& pos, int value)
-	{
-		m_board[pos.y * GAME_LINE_SIZE + pos.x] = (char)value;
 	}
 
 	Position NextPos(const Position& pos, int dir)
@@ -497,10 +506,10 @@ struct HostSnakeEngine : SnakeEngine
 			if (!player.alive) continue;
 			// next cell
 			Position next = NextPos(player.snake.back(), player.dir);
-			int cell = GetCellValue(next);
-			bool food = cell == FOOD_VALUE;
-			if (food) AddFood();
-			else if (cell != 0)
+			int cell = next.cell(GAME_LINE_SIZE);
+			bool food = m_board[cell] == FOOD_VALUE;
+			
+			if (!food && m_board[cell] != 0)
 			{
 				// dead
 				player.alive = false;
@@ -509,12 +518,17 @@ struct HostSnakeEngine : SnakeEngine
 			}
 			// advance
 			player.snake.push_back(next);
-			m_board[next.y * GAME_LINE_SIZE + next.x] = player.color;
+			m_board[cell] = player.color;
+			if (food)
+			{
+				m_food.erase(cell);
+				AddFood();
+			}
 			// pop oldest cell if not growing
 			if (!player.grow)
 			{
 				Position& old = player.snake.front();
-				m_board[old.y * GAME_LINE_SIZE + old.x] = 0;
+				m_board[old.cell(GAME_LINE_SIZE)] = 0;
 				player.snake.pop_front();
 			}
 			player.grow = food;

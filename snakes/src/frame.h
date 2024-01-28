@@ -43,6 +43,7 @@ namespace snakes
 			void AskReady();
 			void _EnableConnectButtons(bool ebabled);
 			void _CreateGame(EngineType mode);
+			void _Terminate();
 		public:
 
 			MainFrame( const wxString& title = wxEmptyString,

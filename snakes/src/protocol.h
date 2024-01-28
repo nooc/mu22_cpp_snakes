@@ -32,6 +32,7 @@ namespace snakes {
 		short x, y;
 		Position& operator=(const Position& pos) { x = pos.x; y = pos.y; return *this; }
 		Position& set(short _x, short _y) { x = _x; y = _y; return *this; }
+		int cell(int lineWidth) { return y * lineWidth + x; }
 	};
 	
 	// Player score where score is snake length.

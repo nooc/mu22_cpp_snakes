@@ -69,6 +69,7 @@ namespace snakes {
 	};
 	typedef std::shared_ptr<Player> PlayerPtr;
 	typedef std::map<int, PlayerPtr> PlayerMap;
+	typedef std::map<int, Position> FoodMap;
 
 	struct Engine {
 		virtual void ProcessSocket(wxSocketEvent& event) = 0;
@@ -77,6 +78,7 @@ namespace snakes {
 		virtual bool IsOk() = 0;
 		virtual bool IsPlaying() = 0;
 		virtual PlayerMap& GetPlayers() = 0;
+		virtual FoodMap& GetFood() const = 0;
 		virtual char* GetBoard() const = 0;
 		virtual void Ready() = 0;
 		virtual void Start() {} // for host
