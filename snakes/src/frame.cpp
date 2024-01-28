@@ -1,5 +1,5 @@
 #include <wx/wxprec.h>
-#include <wx/graphics.h>
+#include <wx/dcbuffer.h>
 
 #include <random>
 
@@ -26,6 +26,7 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	int boardDim = GAME_CELL_SIZE * GAME_LINE_SIZE;
 
 	m_gameView = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(boardDim, boardDim), wxBORDER_NONE);
+	m_gameView->SetBackgroundStyle(wxBackgroundStyle::wxBG_STYLE_PAINT);
 	m_gameView->SetBackgroundColour(wxColour(0, 0, 0));
 	m_gameView->SetMinSize(wxSize(boardDim, boardDim));
 	m_gameView->SetMaxSize(wxSize(boardDim, boardDim));
@@ -136,17 +137,23 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 	}
 	else if (eevt == EET_TERMINATE)
 	{
-		// destroy game 
-		m_game->Destroy();
-		m_game = NULL;
-		_EnableConnectButtons(true);
+		_Terminate();
 	}
+}
+
+void MainFrame::_Terminate()
+{
+	// destroy game 
+	m_game->Destroy();
+	m_game = NULL;
+	_EnableConnectButtons(true);
 }
 
 void MainFrame::AskReady()
 {
-	wxMessageBox(wxT("Hit Ok when ready?"), wxT("Ready Check"));
-	m_game->Ready();
+	int ret = wxMessageBox(wxT("Hit Ok when ready?"), wxT("Ready Check"), wxOK|wxCANCEL|wxICON_QUESTION);
+	if(ret==wxOK) m_game->Ready();
+	else _Terminate();
 }
 
 void MainFrame::ProcessKeyInput(wxKeyEvent& event)
@@ -187,27 +194,28 @@ void MainFrame::ProcessSocket(wxSocketEvent& event)
 
 void MainFrame::PaintGame(wxPaintEvent& event)
 {
-	wxPaintDC dc(m_gameView);
+	wxAutoBufferedPaintDC dc(m_gameView);
 	if (m_game)
 	{
-		char* board = m_game->GetBoard();
-		for (int y = 0; y < GAME_LINE_SIZE; y++)
+		dc.SetBackground(*s_brushes[0]);
+		dc.Clear();
+
+		// /draw snakes
+		for (auto i = m_game->GetPlayers().begin(), j = m_game->GetPlayers().end(); i != j; i++)
 		{
-			for (int x = 0; x < GAME_LINE_SIZE; x++)
+			for (auto q = i->second->snake.begin(), t = i->second->snake.end(); q != t; q++)
 			{
-				int cell = board[y * GAME_LINE_SIZE + x];
-				if (cell == FOOD_VALUE)
-				{
-					dc.SetPen(*s_pens[0]);
-					dc.GradientFillConcentric(wxRect(x * GAME_CELL_SIZE, y * GAME_CELL_SIZE, GAME_CELL_SIZE, GAME_CELL_SIZE), s_foodColor, *wxBLACK);
-				}
-				else
-				{
-					dc.SetPen(*s_pens[cell]);
-					dc.SetBrush(*s_brushes[cell]);
-					dc.DrawRectangle(x * GAME_CELL_SIZE, y * GAME_CELL_SIZE, GAME_CELL_SIZE, GAME_CELL_SIZE);
-				}
+				int color = i->second->color;
+				dc.SetPen(*s_pens[color]);
+				dc.SetBrush(*s_brushes[color]);
+				dc.DrawRectangle(q->x * GAME_CELL_SIZE, q->y * GAME_CELL_SIZE, GAME_CELL_SIZE, GAME_CELL_SIZE);
 			}
+		}
+		// draw food
+		for (auto i = m_game->GetFood().begin(), j = m_game->GetFood().end(); i != j; i++)
+		{
+			dc.SetPen(*s_pens[0]);
+			dc.GradientFillConcentric(wxRect(i->second.x * GAME_CELL_SIZE, i->second.y * GAME_CELL_SIZE, GAME_CELL_SIZE, GAME_CELL_SIZE), s_foodColor, *wxBLACK);
 		}
 	}
 	else
