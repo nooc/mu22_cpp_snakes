@@ -1,11 +1,11 @@
 #include <wx/wxprec.h>
 #include <wx/dcbuffer.h>
-
-#include <random>
+#include <wx/imaglist.h>
 
 #include "frame.h"
 #include "histdiag.h"
 #include "conndiag.h"
+#include "nick_gen.h"
 
 using namespace snakes;
 
@@ -31,14 +31,31 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_gameView->SetMinSize(wxSize(boardDim, boardDim));
 	m_gameView->SetMaxSize(wxSize(boardDim, boardDim));
 
-	bSizer1->Add(m_gameView, 0, wxTOP|wxALIGN_CENTRE_HORIZONTAL, 5);
+	bSizer1->Add(m_gameView, 0, wxALL | wxALIGN_CENTRE_HORIZONTAL, 5);
+
+	//TODO: fix list 
+	m_playerList = new wxListView(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_ICON | wxLC_NO_HEADER);
+	auto images = new wxImageList(24, 24, true, 4);
+	wxMemoryDC memDc;
+	for (int i = 0; i < 4; i++)
+	{
+		auto bitmap = images->GetBitmap(i);
+		memDc.SelectObject(bitmap);
+		memDc.FloodFill(0,0, s_brushes[i + 1]->GetColour());
+	}
+	m_playerList->SetMaxSize(wxSize(boardDim, 32));
+	m_playerList->SetMinSize(wxSize(boardDim, 32));
+	
+	m_playerList->AssignImageList(images, wxIMAGE_LIST_NORMAL);
+
+	bSizer1->Add(m_playerList, 0, wxALL|wxEXPAND, 5);
 
 	wxBoxSizer* bSizer2 = new wxBoxSizer(wxHORIZONTAL);
 
 	wxStaticBoxSizer* sbSizer2 = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("Scores")), wxHORIZONTAL);
 
 	m_scorelist = new wxListBox(sbSizer2->GetStaticBox(),wxID_ANY);
-	sbSizer2->Add(m_scorelist, 1, wxALL, 5);
+	sbSizer2->Add(m_scorelist, 1, wxALL| wxEXPAND, 5);
 
 	m_historyButton = new wxButton(sbSizer2->GetStaticBox(), BTN_HISTORY, wxT("History"), wxDefaultPosition, wxDefaultSize, 0);
 	sbSizer2->Add(m_historyButton, 0, wxALL, 5);
@@ -46,6 +63,13 @@ MainFrame::MainFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	bSizer2->Add(sbSizer2, 1, wxALL | wxEXPAND, 5);
 
 	wxStaticBoxSizer* sbSizer1 = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("Game")), wxVERTICAL);
+
+	m_nickName = new wxTextCtrl(sbSizer1->GetStaticBox(), wxID_ANY);
+	m_nickName->SetMaxLength(14);
+	m_nickName->SetHint(wxT("nick name"));
+	m_nickName->SetValue(GenerateNickName());
+
+	sbSizer1->Add(m_nickName, 0, wxALL|wxEXPAND, 5);
 
 	wxBoxSizer* bSizer5 = new wxBoxSizer(wxHORIZONTAL);
 
@@ -106,6 +130,17 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 		// client event
 		m_gameView->Refresh(false);
 	}
+	else if (eevt == EET_PLAYERS)
+	{
+		m_playerList->DeleteAllItems();
+		PlayerMap& players = m_game->GetPlayers();
+		int idx = 0;
+		for (auto i = players.begin(), j = players.end(); i != j; i++)
+		{
+			m_playerList->InsertItem(idx, i->second->nick, i->second->color-1);
+			m_playerList->EnsureVisible(idx++);
+		}
+	}
 	else if (eevt == EET_ASK_READY)
 	{
 		AskReady();
@@ -123,8 +158,8 @@ void MainFrame::OnEngineEvent(EngineEvent& event)
 		for (auto i = players.begin(), j = players.end(); i != j; i++)
 		{
 			Player& p = *i->second;
-			if (!score.empty()) score << wxT(" - ");
-			wxString playerScore = wxString() << p.color << wxT(": ") << p.snake.size();
+			if (!score.empty()) score << wxT(" | ");
+			wxString playerScore = wxString() << p.nick << wxT(": ") << p.snake.size();
 			score << playerScore;
 			m_scorelist->Append(playerScore);
 
@@ -234,11 +269,18 @@ void MainFrame::PaintGame(wxPaintEvent& event)
 
 void MainFrame::_CreateGame(EngineType mode)
 {
+	auto nick = m_nickName->GetValue().Trim();
+	if (nick.IsEmpty())
+	{
+		wxMessageBox(wxT("No nick name."), wxT("Error"));
+		return;
+	}
+
 	ConnectionDialog dlg(this, mode, m_cfg);
 	if (dlg.ShowModal() == wxID_OK)
 	{
 		_EnableConnectButtons(false);
-		m_game = EngineFactory::Create(mode, dlg.GetValue(), this);
+		m_game = EngineFactory::Create(mode, dlg.GetValue(), this, nick);
 		m_gameView->Refresh();
 	}
 }

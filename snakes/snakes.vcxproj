@@ -17,6 +17,7 @@
     <ClCompile Include="src\conndiag.cpp" />
     <ClCompile Include="src\histdiag.cpp" />
     <ClCompile Include="src\history.cpp" />
+    <ClCompile Include="src\nick_gen.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine.h" />
@@ -25,6 +26,7 @@
     <ClInclude Include="src\conndiag.h" />
     <ClInclude Include="src\histdiag.h" />
     <ClInclude Include="src\history.h" />
+    <ClInclude Include="src\nick_gen.h" />
     <ClInclude Include="src\protocol.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

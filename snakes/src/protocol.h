@@ -13,9 +13,10 @@ namespace snakes {
 		PLAYERS, // server->clientS announce players
 		READY, // client->server mark as ready for game round
 		TURN, // client->server request, server->clientS update
-		START, // server->clientS end round
+		START, // server->clientS start round
 		END, // server->clientS end round
-		FOOD // server->clientS food cell
+		FOOD, // server->clientS food cell
+		NICK // client->server nick name
 	};
 
 	// Move direction
@@ -63,6 +64,7 @@ namespace snakes {
 	{
 		short color;
 		Direction dir;
+		char nick[16];
 	};
 
 	struct IDMessage
@@ -98,6 +100,10 @@ namespace snakes {
 		short count;
 		PlayerScore score[4];
 	};
+	struct NickMessage
+	{
+		char nick[16];
+	};
 
 	struct Message
 	{
@@ -110,6 +116,7 @@ namespace snakes {
 			AdvanceMessage advance;
 			PosMessage position;
 			FoodMessage food;
+			NickMessage nick;
 		} body;
 	};
 }

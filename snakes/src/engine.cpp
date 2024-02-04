@@ -1,12 +1,14 @@
 #include <wx/wxprec.h>
 #include <wx/socket.h>
-#include <cmath>
 #include <random>
 
 #include "engine.h"
 
 // define custom event. (outside namespace to prevent link error)
 wxDEFINE_EVENT(ENGINE_EVENT, snakes::EngineEvent);
+
+// iteration helper macro
+#define IJ_ITERATE(collection) for (auto i = collection.begin(), j = collection.end(); i != j; i++)
 
 using namespace snakes;
 
@@ -30,7 +32,7 @@ struct PlayerImpl : Player
 {
 	wxSocketBase* m_socket;
 
-	PlayerImpl(short _id, short x, short y, Direction _dir, wxSocketBase* socket): m_socket(socket),Player(_id, x, y, _dir) {}
+	PlayerImpl(const wxString& nick, short _id, short x, short y, Direction _dir, wxSocketBase* socket): m_socket(socket), Player(nick, _id, x, y, _dir) {}
 	~PlayerImpl() { if (m_socket) m_socket->Destroy(); }
 };
 
@@ -68,16 +70,18 @@ struct SnakeEngine : Engine
 	bool m_ok;
 	bool m_host;
 	bool m_playing;
+	wxString m_nick;
 
 	std::random_device m_rd;
 	std::mt19937 m_gen; // mersenne_twister_engine seeded with rd()
 
-	SnakeEngine(wxEvtHandler* handler, bool host=false)
+	SnakeEngine(wxEvtHandler* handler, const wxString& nick, bool host=false)
 		: m_handler(handler),
 		m_host(host),
 		m_ok(false),
 		m_playing(false),
-		m_gen(m_rd())
+		m_gen(m_rd()),
+		m_nick(nick)
 	{
 		m_boardSize = GAME_LINE_SIZE * GAME_LINE_SIZE;
 		m_board = new char[m_boardSize];
@@ -119,7 +123,7 @@ struct SnakeEngine : Engine
 		int quat = GAME_LINE_SIZE / 4;
 		int half = GAME_LINE_SIZE / 2;
 		int iterPos = 0;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			int row = iterPos / 2;
 			int col = iterPos % 2;
@@ -136,10 +140,10 @@ struct SnakeEngine : Engine
 	/// <param name="id">Player id. Same as socket id on host side.</param>
 	/// <param name="socket">Socket or null</param>
 	/// <returns>Created player</returns>
-	PlayerImpl* AddPlayer(int id, wxSocketBase*socket)
+	PlayerImpl* AddPlayer(const wxString& nick, int id, wxSocketBase*socket)
 	{
 		std::uniform_int_distribution<> distrib(0, 3);
-		auto player = new PlayerImpl(id, GAME_LINE_SIZE / 2, GAME_LINE_SIZE / 2, (Direction)distrib(m_gen), socket);
+		auto player = new PlayerImpl(nick, id, GAME_LINE_SIZE / 2, GAME_LINE_SIZE / 2, (Direction)distrib(m_gen), socket);
 		PlayerPtr ptr(player);
 		m_players[id] = ptr;
 		// send id
@@ -169,7 +173,7 @@ struct SnakeEngine : Engine
 			PlayerImpl* p;
 			auto pptri = m_players.find(pm.id);
 			if (pptri == m_players.end())
-				p = AddPlayer(pm.id, NULL);
+				p = AddPlayer(pm.nick, pm.id, NULL);
 			else p = (PlayerImpl*)pptri->second.get();
 			p->snake.clear();
   			p->snake.push_back(pm.pos);
@@ -177,6 +181,7 @@ struct SnakeEngine : Engine
 			p->dir = pm.dir;
 			m_board[pm.pos.cell(GAME_LINE_SIZE)] = pm.color;
 		}
+		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_PLAYERS));
 	}
 
 	/// <summary>
@@ -190,22 +195,25 @@ struct SnakeEngine : Engine
 		m.header.size = sizeof(m.body.players.count) + sizeof(PlayerMessage) * m.body.players.count; // only send pos eq to amount of players (max 4)
 		m.body.players.count = m_players.size();
 		int idx = 0;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerMessage& pcm = m.body.players.player[idx++];
 			pcm.id = i->second->id;
 			pcm.pos = i->second->snake.back();
 			pcm.color = i->second->color;
+			auto nick = i->second->nick.utf8_str();
+			memcpy(pcm.nick, nick.data(), nick.length());
+			pcm.nick[nick.length()] = 0;
 		}
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)(*i->second);
 			if (p.m_socket) p.m_socket->Write(&m, sizeof(MessageHeader) + m.header.size);
 		}
 	}
 
-	PlayerMap& GetPlayers() {
-		return m_players;
+	PlayerMap& GetPlayers() const {
+		return const_cast<PlayerMap&>(m_players);
 	}
 
 	void AddFood()
@@ -225,7 +233,7 @@ struct SnakeEngine : Engine
 		m.header.type = MessageType::FOOD;
 		m.header.size = sizeof(m.body.food);
 		m.body.food.pos = foodPos;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 			if (p.m_socket) p.m_socket->Write(&m,sizeof(MessageHeader)+m.header.size);
@@ -282,6 +290,11 @@ struct SnakeEngine : Engine
 		m_food[cell] = food.pos;
 	}
 
+	void SetNick(NickMessage& nick, PlayerImpl* player)
+	{
+		player->nick = nick.nick;
+	}
+
 	void ReadData(wxSocketBase* sock)
 	{
 		Message m;
@@ -307,7 +320,7 @@ struct SnakeEngine : Engine
 			break;
 		case MessageType::END:
 			m_playing = false;
-			for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+			IJ_ITERATE(m_players)
 			{
 				i->second->grow = false;
 				i->second->ready = false;
@@ -315,7 +328,7 @@ struct SnakeEngine : Engine
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_END));
 			break;
 		case MessageType::ID:
-			m_me = AddPlayer(m.body.id.id, NULL); // cient adds self
+			m_me = AddPlayer(m_nick, m.body.id.id, NULL); // cient adds self
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_ASK_READY));
 			break;
 		case MessageType::PLAYERS:
@@ -339,6 +352,10 @@ struct SnakeEngine : Engine
 				m_me->dir = m.body.turn.dir;
 			}
 			break;
+		case MessageType::NICK:
+			SetNick(m.body.nick, p);
+			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_PLAYERS));
+			break;
 		default:
 			break;
 		}
@@ -354,15 +371,16 @@ struct HostSnakeEngine : SnakeEngine
 	// send game ticks
 	wxTimer m_timer;
 
-	HostSnakeEngine(const wxString& connectionString, wxEvtHandler* handler) : SnakeEngine(handler,true), m_timer(handler)
+	HostSnakeEngine(const wxString& connectionString, wxEvtHandler* handler, const wxString& nick) : SnakeEngine(handler,nick,true), m_timer(handler)
 	{
 		m_listening = new wxSocketServer(getAddr(connectionString));
 		m_listening->SetNotify(SOCKET_FLAGS);
 		m_listening->SetEventHandler(*handler);
 		m_listening->Notify(true);
 		m_ok = m_listening->IsOk();
-		m_me = AddPlayer(m_listening->GetSocket(), NULL);
+		m_me = AddPlayer(m_nick, m_listening->GetSocket(), NULL);
 
+		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_PLAYERS));
 		wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_ASK_READY));
 	}
 	
@@ -405,7 +423,8 @@ struct HostSnakeEngine : SnakeEngine
 				if (sock)
 				{
 					ConfigSocket(sock);
-					AddPlayer(sock->GetSocket(), sock);
+					AddPlayer(wxString() << sock->GetSocket(), sock->GetSocket(), sock);
+					wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_PLAYERS));
 				}
 			}
 			break;
@@ -449,7 +468,7 @@ struct HostSnakeEngine : SnakeEngine
 		m.header.size = sizeof(m.body.advance.count) + m_players.size()*sizeof(PosGrow);
 
 		int idx = 0;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 			if (!p.alive) continue;
@@ -459,7 +478,7 @@ struct HostSnakeEngine : SnakeEngine
 			idx++;
 		}
 		m.body.advance.count = idx;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 			if (p.m_socket) p.m_socket->Write(&m, sizeof(m.header) + m.header.size);
@@ -476,7 +495,7 @@ struct HostSnakeEngine : SnakeEngine
 		m.header.size = sizeof(m.body.end.count)  + sizeof(PlayerScore)*m_players.size(); // only send scores eq to amount of players (max 4)
 		m.body.end.count = m_players.size();
 		int pIdx = 0;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			// reset
 			i->second->grow = false;
@@ -487,7 +506,7 @@ struct HostSnakeEngine : SnakeEngine
 			score.score = i->second->snake.size();
 		}
 		m.body.end.count = pIdx; // player count
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 			if (p.m_socket)
@@ -536,7 +555,7 @@ struct HostSnakeEngine : SnakeEngine
 		// send to clients
 		SendAdvance();
 		// continue if anyone is alive
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			if (i->second->alive) return;
 		}
@@ -560,7 +579,7 @@ struct HostSnakeEngine : SnakeEngine
 	/// </summary>
 	void ResetSnakes()
 	{
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			i->second->snake.clear();
 			i->second->snake.push_back(Position());
@@ -573,7 +592,7 @@ struct HostSnakeEngine : SnakeEngine
 	/// </summary>
 	void TestReady()
 	{
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			// return if not ready
 			if (!i->second->ready) return;
@@ -595,7 +614,7 @@ struct HostSnakeEngine : SnakeEngine
 		Message m;
 		m.header.type = MessageType::START;
 		m.header.size = 0;
-		for (auto i = m_players.begin(), j = m_players.end(); i != j; i++)
+		IJ_ITERATE(m_players)
 		{
 			PlayerImpl& p = (PlayerImpl&)*i->second;
 
@@ -620,7 +639,7 @@ struct ClientSnakeEngine : SnakeEngine
 {
 	wxSocketClient* m_connection;
 
-	ClientSnakeEngine(const wxString& connectionString, wxEvtHandler* handler) : SnakeEngine(handler)
+	ClientSnakeEngine(const wxString& connectionString, wxEvtHandler* handler, const wxString& nick) : SnakeEngine(handler, nick)
 	{
 		m_connection = new wxSocketClient();
 		ConfigSocket(m_connection);
@@ -650,6 +669,7 @@ struct ClientSnakeEngine : SnakeEngine
 			wxPostEvent(m_handler, EngineEvent(EngineEventType::EET_TERMINATE));
 			break;
 		case wxSOCKET_CONNECTION:
+			SendNick();
 			m_ok = true;
 		default:
 			break;
@@ -658,6 +678,17 @@ struct ClientSnakeEngine : SnakeEngine
 
 	bool IsPlaying() {
 		return m_playing;
+	}
+
+	void SendNick()
+	{
+		Message m;
+		m.header.type = MessageType::NICK;
+		auto nick = m_nick.utf8_str();
+		m.header.size = nick.length();
+		memcpy(&m.body.nick, nick.data(), nick.length());
+		m.body.nick.nick[nick.length()] = 0;
+		m_connection->Write(&m, sizeof(m.header) + m.header.size);
 	}
 
 	void Ready() {
@@ -692,7 +723,7 @@ struct ClientSnakeEngine : SnakeEngine
 /// <param name="connectionString"></param>
 /// <param name="handler"></param>
 /// <returns></returns>
-Engine* EngineFactory::Create(EngineType type, const wxString& connectionString, wxEvtHandler* handler)
+Engine* EngineFactory::Create(EngineType type, const wxString& connectionString, wxEvtHandler* handler, const wxString& nick)
 {
-	return (type == ET_CLIENT) ? (Engine*)new ClientSnakeEngine(connectionString, handler) : (Engine*)new HostSnakeEngine(connectionString, handler);
+	return (type == ET_CLIENT) ? (Engine*)new ClientSnakeEngine(connectionString, handler, nick) : (Engine*)new HostSnakeEngine(connectionString, handler, nick);
 }

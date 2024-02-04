@@ -17,7 +17,7 @@ wxDECLARE_EVENT(ENGINE_EVENT, snakes::EngineEvent);
 namespace snakes {
 	enum EngineEventType
 	{
-		EET_UNDEFINED,
+		EET_PLAYERS,
 		EET_ASK_READY,
 		EET_START,
 		EET_END,
@@ -29,7 +29,7 @@ namespace snakes {
 	{
 		EngineEventType m_type;
 	public:
-		EngineEvent(): wxEvent(), m_type(EngineEventType::EET_UNDEFINED) {}
+		EngineEvent(): wxEvent(), m_type(EngineEventType::EET_REFRESH) {}
 		EngineEvent(EngineEventType type, int winId=0);
 		EngineEvent(const EngineEvent& event);
 		~EngineEvent() {}
@@ -59,9 +59,11 @@ namespace snakes {
 		bool alive;
 		bool ready;
 		bool grow;
+		wxString nick;
 		std::list<Position> snake;
 
-		Player(short _id, short x, short y, Direction _dir) : id(_id), color(0), dir(_dir), alive(false),grow(false),ready(false) {
+		Player(const wxString& _nick, short _id, short x, short y, Direction _dir)
+			: nick(_nick),id(_id), color(0), dir(_dir), alive(false), grow(false), ready(false) {
 			snake.push_back(Position().set(x, y));
 		}
 		virtual ~Player() {}
@@ -77,16 +79,16 @@ namespace snakes {
 		virtual void Destroy() = 0;
 		virtual bool IsOk() = 0;
 		virtual bool IsPlaying() = 0;
-		virtual PlayerMap& GetPlayers() = 0;
+		virtual PlayerMap& GetPlayers() const = 0;
 		virtual FoodMap& GetFood() const = 0;
 		virtual char* GetBoard() const = 0;
-		virtual void Ready() = 0;
-		virtual void Start() {} // for host
+		virtual void Ready() = 0; // call from EET_ASK_READY
+		virtual void Start() {} // call from EET_START event
 		virtual void Turn(Direction dir) = 0;
 	};
 
 	struct EngineFactory
 	{
-		static Engine* Create(EngineType type, const wxString& connectionString, wxEvtHandler* handler);
+		static Engine* Create(EngineType type, const wxString& connectionString, wxEvtHandler* handler, const wxString& nick);
 	};
 }

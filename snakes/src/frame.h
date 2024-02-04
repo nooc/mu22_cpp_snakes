@@ -29,6 +29,8 @@ namespace snakes
 			wxButton* m_connectButton;
 			wxButton* m_hotsButton;
 			wxButton* m_disconnectButton;
+			wxTextCtrl* m_nickName;
+			wxListView* m_playerList;
 
 			void PaintGame(wxPaintEvent& event);
 			void ConnectToRemote(wxCommandEvent& event);
