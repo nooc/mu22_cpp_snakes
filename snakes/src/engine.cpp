@@ -251,6 +251,7 @@ struct SnakeEngine : Engine
 
 	void EchoTurn(PlayerImpl& player, Message &m)
 	{
+		// TODO: fix by sending to all 
 		m.body.turn.request = false;
 		player.m_socket->Write(&m, sizeof(MessageHeader)+m.header.size);
 	}
